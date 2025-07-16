@@ -33,6 +33,13 @@ To send a message in a conversation, send a JSON object with the following struc
 }
 ```
 
+**Example using `wscat`:**
+
+```bash
+wscat -c "ws://localhost:8000/ws/chat/1/?token=<your-auth-token>"
+> {"message": "Hello, world!"}
+```
+
 ### Receiving Messages
 
 When a new message is sent in the conversation, you will receive a JSON object with the following structure from the chat WebSocket:
@@ -64,6 +71,18 @@ When a new notification is available for the authenticated user, you will receiv
 }
 ```
 
+**Example using `wscat`:**
+
+```bash
+wscat -c "ws://localhost:8000/ws/notifications/?token=<your-auth-token>"
+```
+
 ### Marking Notifications as Read
 
 To mark a notification as read, you need to send a request to the REST API, not through the WebSocket.
+
+**Example using `curl`:**
+
+```bash
+curl -X POST -H "Authorization: Token <your-auth-token>" http://localhost:8000/api/notifications/1/read/
+```

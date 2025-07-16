@@ -59,19 +59,19 @@ This is a Django-based tournament management system that allows users to create 
 5.  **Run the database migrations:**
 
     ```bash
-    python tournament_project/manage.py migrate
+    python manage.py migrate
     ```
 
 6.  **Create a superuser:**
 
     ```bash
-    python tournament_project/manage.py createsuperuser
+    python manage.py createsuperuser
     ```
 
 7.  **Run the development server:**
 
     ```bash
-    python tournament_project/manage.py runserver
+    python manage.py runserver
     ```
 
 The API will be available at `http://127.0.0.1:8000/api/`.
@@ -82,17 +82,25 @@ The API documentation is available at `http://127.0.0.1:8000/api/docs/`.
 
 ## Project Structure
 
+The project is organized into several Django apps:
+
+*   `chat`: Handles real-time chat between users.
+*   `notifications`: Manages user notifications.
+*   `tournaments`: Core application for tournament and match management.
+*   `users`: Manages users, teams, and authentication.
+*   `wallet`: Handles user wallets and transactions.
+
 ```
 .
-├── chat/                 # Chat application
-├── notifications/        # Notifications application
-├── tournament_project/   # Django project
-│   ├── tournaments/      # Tournaments application
-│   ├── users/            # Users application
-│   └── wallet/           # Wallet application
-├── .github/              # GitHub Actions workflows
-├── requirements.txt      # Python dependencies
-├── websockets.md         # WebSocket usage guide
+├── chat/
+├── notifications/
+├── tournament_project/
+├── tournaments/
+├── users/
+├── wallet/
+├── .github/
+├── requirements.txt
+├── websockets.md
 └── README.md
 ```
 

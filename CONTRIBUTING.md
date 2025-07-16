@@ -20,17 +20,19 @@ git checkout -b 123-add-a-contributing-file
 
 ## Get the test suite running
 
-Be sure to have the test suite running before you make any changes. You'll need to have `docker` and `docker-compose` installed.
+To run the tests, you'll need to have `docker` and `docker-compose` installed.
 
 ```sh
 docker-compose up
 ```
 
+This will start the development server and run the tests.
+
 ## Implement your fix or feature
 
 At this point, you're ready to make your changes! Feel free to ask for help; everyone is a beginner at first :smile_cat:
 
-For style, we follow the [PEP 8](https://www.python.org/dev/peps/pep-0008/) style guide.
+For style, we follow the [PEP 8](https://www.python.org/dev/peps/pep-0008/) style guide. We also use `black` and `isort` to format the code.
 
 ## Make a Pull Request
 
