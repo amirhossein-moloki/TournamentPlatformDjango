@@ -9,6 +9,10 @@ class User(AbstractUser):
     profile_picture = models.ImageField(
         upload_to="profile_pictures/", null=True, blank=True
     )
+    points = models.IntegerField(default=0)
+    authentication_level = models.IntegerField(default=1)
+    authentication_status = models.CharField(max_length=20, choices=(("not_requested", "Not Requested"), ("pending", "Pending"), ("approved", "Approved"), ("rejected", "Rejected")), default="not_requested")
+    tournaments_played = models.IntegerField(default=0)
 
     class Meta:
         app_label = "users"
