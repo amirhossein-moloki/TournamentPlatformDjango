@@ -140,6 +140,33 @@ class TeamTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
+class UserAPITest(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="testuser", password="password", phone_number="+12125552368"
+        )
+
+    def test_send_otp_ratelimit(self):
+        url = reverse("user-send-otp")
+        data = {"phone_number": self.user.phone_number}
+        for i in range(5):
+            response = self.client.post(url, data)
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_verify_otp_ratelimit(self):
+        url = reverse("user-verify-otp")
+        data = {"phone_number": self.user.phone_number, "code": "123456"}
+        for i in range(5):
+            response = self.client.post(url, data)
+            self.assertNotEqual(
+                response.status_code, status.HTTP_429_TOO_MANY_REQUESTS
+            )
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+
 class InvitationTests(APITestCase):
     def setUp(self):
         self.client = APIClient()

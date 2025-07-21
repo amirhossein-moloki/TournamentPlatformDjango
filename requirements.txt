@@ -19,6 +19,7 @@ django-axes==8.0.0
 django-cors-headers==4.7.0
 django-filter==25.1
 django-phonenumber-field==8.1.0
+django-ratelimit==4.0.0
 django-redis==6.0.0
 django_celery_results==2.6.0
 djangorestframework==3.16.0
@@ -41,6 +42,8 @@ propcache==0.3.2
 PyJWT==2.10.1
 python-dateutil==2.9.0.post0
 python-dotenv==1.1.1
+python-magic==0.4.27
+pyclamd==0.4.0
 PyYAML==6.0.2
 redis==6.2.0
 referencing==0.36.2
@@ -50,6 +53,7 @@ six==1.17.0
 smsir-python==1.0.8
 sortedcontainers==2.4.0
 sqlparse==0.5.3
+django-sslserver==0.22
 twilio==9.6.5
 typing_extensions==4.14.1
 tzdata==2025.2

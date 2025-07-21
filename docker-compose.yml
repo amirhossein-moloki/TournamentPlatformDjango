@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    command: gunicorn tournament_project.wsgi:application --bind 0.0.0.0:8000
+    volumes:
+      - .:/app
+      - /var/log/tournament_platform:/var/log/tournament_platform
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+    environment:
+      - SECRET_KEY=a-default-secret-key
+      - DEBUG=True
+      - ALLOWED_HOSTS=localhost,127.0.0.1
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000
+      - CORS_ALLOW_ALL_ORIGINS=True
+      - ZARINPAL_MERCHANT_ID=your-merchant-id
+      - ZARINPAL_SANDBOX=True
+      - EMAIL_HOST_USER=your-email
+      - EMAIL_HOST_PASSWORD=your-password
+      - SMSIR_API_KEY=your-api-key
+      - SMSIR_LINE_NUMBER=your-line-number
+
+  db:
+    image: postgres:13
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_DB=tournament_platform
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+
+  redis:
+    image: redis:6.2-alpine
+
+  celery:
+    build: .
+    command: celery -A tournament_project worker -l info
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+      - redis
+
+volumes:
+  postgres_data:

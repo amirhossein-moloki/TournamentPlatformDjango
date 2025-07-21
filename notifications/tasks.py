@@ -40,7 +40,10 @@ def send_tournament_credentials(tournament_id):
     """
     from tournaments.models import Tournament
 
-    tournament = Tournament.objects.get(id=tournament_id)
+    tournament = (
+        Tournament.objects.prefetch_related("participants__user")
+        .get(id=tournament_id)
+    )
     participants = tournament.participants.all()
     context = {
         "tournament_name": tournament.name,

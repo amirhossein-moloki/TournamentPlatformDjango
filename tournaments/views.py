@@ -2,6 +2,8 @@ from django.conf import settings
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from rest_framework.decorators import api_view, permission_classes
 from django.db import models
 from wallet.models import Transaction
@@ -61,7 +63,9 @@ class TournamentViewSet(viewsets.ModelViewSet):
     ViewSet for managing tournaments.
     """
 
-    queryset = Tournament.objects.all()
+    queryset = Tournament.objects.select_related("game", "creator").prefetch_related(
+        "participants", "teams"
+    )
     serializer_class = TournamentSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
@@ -188,7 +192,15 @@ class MatchViewSet(viewsets.ModelViewSet):
     ViewSet for managing matches.
     """
 
-    queryset = Match.objects.all()
+    queryset = Match.objects.select_related(
+        "tournament",
+        "participant1_user",
+        "participant2_user",
+        "participant1_team",
+        "participant2_team",
+        "winner_user",
+        "winner_team",
+    )
     serializer_class = MatchSerializer
     permission_classes = [IsAuthenticated]
 
@@ -443,6 +455,7 @@ class ScoringViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
 
 
+@method_decorator(cache_page(60 * 15), name="get")
 class TopTournamentsView(APIView):
     """
     API view for getting top tournaments by prize pool.

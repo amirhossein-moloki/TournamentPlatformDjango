@@ -15,13 +15,23 @@ This is a Django-based tournament management system that allows users to create 
 
 ## Getting Started
 
-### Prerequisites
+### With Docker (Recommended)
+
+1.  **Build and run the containers:**
+    ```bash
+    docker-compose up --build
+    ```
+2.  The application will be available at [http://localhost:8000](http://localhost:8000).
+
+### Manual Installation
+
+#### Prerequisites
 
 *   Python 3.8+
 *   PostgreSQL
 *   Redis
 
-### Installation
+#### Installation
 
 1.  **Clone the repository:**
 
@@ -50,8 +60,8 @@ This is a Django-based tournament management system that allows users to create 
     ```
     SECRET_KEY=your-secret-key
     DEBUG=True
-    DATABASE_URL=postgres://user:password@host:port/dbname
-    REDIS_URL=redis://localhost:6379/0
+    DATABASE_URL=postgres://user:password@db:5432/tournament_platform
+    REDIS_URL=redis://redis:6379/0
     ZARINPAL_MERCHANT_ID="your-merchant-id"
     ZARINPAL_SANDBOX=True
     ```

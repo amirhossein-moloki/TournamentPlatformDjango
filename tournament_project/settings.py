@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     # "django_ratelimit",
     'sslserver',
     'verification',
+    'csp',
 ]
 
 AUTHENTICATION_BACKENDS = [
@@ -78,6 +79,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # "axes.middleware.AxesMiddleware",
+    "csp.middleware.CSPMiddleware",
 ]
 
 ROOT_URLCONF = "tournament_project.urls"
@@ -285,3 +287,29 @@ if "test" in sys.argv:
             "BACKEND": "django.core.cache.backends.dummy.DummyCache",
         }
     }
+
+CSP_DEFAULT_SRC = ("'self'",)
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "security_file": {
+            "level": "INFO",
+            "class": "logging.handlers.WatchedFileHandler",
+            "filename": "/var/log/tournament_platform/security.log",
+        },
+    },
+    "loggers": {
+        "axes.watch_login": {
+            "handlers": ["security_file"],
+            "level": "INFO",
+            "propagate": True,
+        },
+        "django_ratelimit": {
+            "handlers": ["security_file"],
+            "level": "INFO",
+            "propagate": True,
+        },
+    },
+}

@@ -4,24 +4,40 @@ from users.models import Team, User
 
 
 class Game(models.Model):
-    name = models.CharField(max_length=100)
-    description = models.TextField()
+    """
+    Represents a game that can be played in a tournament.
+    """
+
+    name = models.CharField(max_length=100, help_text="The name of the game.")
+    description = models.TextField(help_text="A description of the game.")
 
     class Meta:
         app_label = "tournaments"
+        verbose_name = "Game"
+        verbose_name_plural = "Games"
 
 
 class Scoring(models.Model):
+    """
+    Represents the score of a user in a tournament.
+    """
+
     tournament = models.ForeignKey("Tournament", on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    score = models.IntegerField()
+    score = models.IntegerField(help_text="The user's score in the tournament.")
 
     class Meta:
         unique_together = ("tournament", "user")
         app_label = "tournaments"
+        verbose_name = "Scoring"
+        verbose_name_plural = "Scorings"
 
 
 class GameImage(models.Model):
+    """
+    Represents an image associated with a game, such as a banner or icon.
+    """
+
     IMAGE_TYPE_CHOICES = (
         ("hero_banner", "Hero Banner"),
         ("cta_banner", "CTA Banner"),
@@ -33,35 +49,59 @@ class GameImage(models.Model):
         ("promotional_banner", "Promotional Banner"),
     )
     game = models.ForeignKey(Game, on_delete=models.CASCADE, related_name="images")
-    image_type = models.CharField(max_length=20, choices=IMAGE_TYPE_CHOICES)
-    image = models.ImageField(upload_to="game_images/")
+    image_type = models.CharField(
+        max_length=20,
+        choices=IMAGE_TYPE_CHOICES,
+        help_text="The type of the image.",
+    )
+    image = models.ImageField(
+        upload_to="game_images/", help_text="The image file."
+    )
 
     class Meta:
         app_label = "tournaments"
+        verbose_name = "Game Image"
+        verbose_name_plural = "Game Images"
 
     def __str__(self):
         return f"{self.game.name} - {self.get_image_type_display()}"
 
 
 class Tournament(models.Model):
+    """
+    Represents a tournament.
+    """
+
     class Meta:
         app_label = "tournaments"
+        verbose_name = "Tournament"
+        verbose_name_plural = "Tournaments"
+
     TOURNAMENT_TYPE_CHOICES = (
         ("individual", "Individual"),
         ("team", "Team"),
     )
     type = models.CharField(
-        max_length=20, choices=TOURNAMENT_TYPE_CHOICES, default="individual"
+        max_length=20,
+        choices=TOURNAMENT_TYPE_CHOICES,
+        default="individual",
+        help_text="The type of the tournament (individual or team).",
     )
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, help_text="The name of the tournament.")
     game = models.ForeignKey(Game, on_delete=models.CASCADE)
-    start_date = models.DateTimeField()
-    end_date = models.DateTimeField()
-    is_free = models.BooleanField(default=True)
-    entry_fee = models.DecimalField(
-        max_digits=10, decimal_places=2, null=True, blank=True
+    start_date = models.DateTimeField(help_text="The start date and time of the tournament.")
+    end_date = models.DateTimeField(help_text="The end date and time of the tournament.")
+    is_free = models.BooleanField(
+        default=True, help_text="Whether the tournament is free to enter."
     )
-    rules = models.TextField(blank=True)
+    entry_fee = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="The entry fee for the tournament.",
+    )
+    rules = models.TextField(blank=True, help_text="The rules of the tournament.")
     participants = models.ManyToManyField(
         User, through="Participant", related_name="tournaments", blank=True
     )
@@ -73,8 +113,14 @@ class Tournament(models.Model):
         null=True,
         blank=True,
     )
-    countdown_start_time = models.DateTimeField(null=True, blank=True)
-    required_verification_level = models.IntegerField(default=1)
+    countdown_start_time = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="The time when the tournament countdown starts.",
+    )
+    required_verification_level = models.IntegerField(
+        default=1, help_text="The minimum verification level required to join the tournament."
+    )
 
     def clean(self):
         if self.start_date and self.end_date and self.start_date >= self.end_date:
@@ -95,6 +141,10 @@ class Tournament(models.Model):
 
 
 class Participant(models.Model):
+    """
+    Through model for the relationship between a User and a Tournament.
+    """
+
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     tournament = models.ForeignKey(Tournament, on_delete=models.CASCADE)
     status = models.CharField(
@@ -105,14 +155,21 @@ class Participant(models.Model):
             ("eliminated", "Eliminated"),
         ),
         default="registered",
+        help_text="The status of the participant in the tournament.",
     )
 
     class Meta:
         unique_together = ("user", "tournament")
         app_label = "tournaments"
+        verbose_name = "Participant"
+        verbose_name_plural = "Participants"
 
 
 class Match(models.Model):
+    """
+    Represents a match in a tournament.
+    """
+
     MATCH_TYPE_CHOICES = (
         ("individual", "Individual"),
         ("team", "Team"),
@@ -121,9 +178,12 @@ class Match(models.Model):
         Tournament, on_delete=models.CASCADE, related_name="matches"
     )
     match_type = models.CharField(
-        max_length=20, choices=MATCH_TYPE_CHOICES, default="individual"
+        max_length=20,
+        choices=MATCH_TYPE_CHOICES,
+        default="individual",
+        help_text="The type of the match (individual or team).",
     )
-    round = models.IntegerField()
+    round = models.IntegerField(help_text="The round number of the match.")
     participant1_user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -167,10 +227,17 @@ class Match(models.Model):
         blank=True,
     )
     result_proof = models.ImageField(
-        upload_to="private_result_proofs/", null=True, blank=True
+        upload_to="private_result_proofs/",
+        null=True,
+        blank=True,
+        help_text="An image uploaded as proof of the match result.",
     )
-    is_confirmed = models.BooleanField(default=False)
-    is_disputed = models.BooleanField(default=False)
+    is_confirmed = models.BooleanField(
+        default=False, help_text="Whether the match result is confirmed."
+    )
+    is_disputed = models.BooleanField(
+        default=False, help_text="Whether the match result is disputed."
+    )
 
     def clean(self):
         if self.match_type == "individual":
@@ -194,9 +261,15 @@ class Match(models.Model):
 
     class Meta:
         app_label = "tournaments"
+        verbose_name = "Match"
+        verbose_name_plural = "Matches"
 
 
 class Report(models.Model):
+    """
+    Represents a report made by a user against another user in a match.
+    """
+
     REPORT_STATUS_CHOICES = (
         ("pending", "Pending"),
         ("resolved", "Resolved"),
@@ -209,10 +282,18 @@ class Report(models.Model):
         User, on_delete=models.CASCADE, related_name="received_reports"
     )
     match = models.ForeignKey(Match, on_delete=models.CASCADE)
-    description = models.TextField()
-    evidence = models.FileField(upload_to="report_evidence/", null=True, blank=True)
+    description = models.TextField(help_text="A description of the report.")
+    evidence = models.FileField(
+        upload_to="report_evidence/",
+        null=True,
+        blank=True,
+        help_text="A file uploaded as evidence for the report.",
+    )
     status = models.CharField(
-        max_length=20, choices=REPORT_STATUS_CHOICES, default="pending"
+        max_length=20,
+        choices=REPORT_STATUS_CHOICES,
+        default="pending",
+        help_text="The status of the report.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -221,9 +302,15 @@ class Report(models.Model):
 
     class Meta:
         app_label = "tournaments"
+        verbose_name = "Report"
+        verbose_name_plural = "Reports"
 
 
 class WinnerSubmission(models.Model):
+    """
+    Represents a submission made by a winner of a tournament.
+    """
+
     SUBMISSION_STATUS_CHOICES = (
         ("pending", "Pending"),
         ("approved", "Approved"),
@@ -231,9 +318,15 @@ class WinnerSubmission(models.Model):
     )
     winner = models.ForeignKey(User, on_delete=models.CASCADE)
     tournament = models.ForeignKey(Tournament, on_delete=models.CASCADE)
-    video = models.FileField(upload_to="winner_submissions/")
+    video = models.FileField(
+        upload_to="winner_submissions/",
+        help_text="A video file submitted by the winner.",
+    )
     status = models.CharField(
-        max_length=20, choices=SUBMISSION_STATUS_CHOICES, default="pending"
+        max_length=20,
+        choices=SUBMISSION_STATUS_CHOICES,
+        default="pending",
+        help_text="The status of the submission.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -242,3 +335,5 @@ class WinnerSubmission(models.Model):
 
     class Meta:
         app_label = "tournaments"
+        verbose_name = "Winner Submission"
+        verbose_name_plural = "Winner Submissions"

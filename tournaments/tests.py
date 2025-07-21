@@ -1,14 +1,19 @@
 from datetime import timedelta
 from decimal import Decimal
 
+from unittest.mock import MagicMock, patch
+
+from django.core.exceptions import ValidationError, PermissionDenied
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 from users.models import Team, User
 
-from django.core.exceptions import PermissionDenied
 from .models import Game, Match, Tournament, Report, WinnerSubmission
+from .upload_handlers import SafeFileUploadHandler
 
 
 class TournamentAPITest(APITestCase):
@@ -232,3 +237,43 @@ class WinnerSubmissionTests(APITestCase):
                 {"tournament": self.tournament.id, "video": "some_video.mp4"},
                 format="multipart",
             )
+
+
+class SafeFileUploadHandlerTest(TestCase):
+    def setUp(self):
+        self.handler = SafeFileUploadHandler()
+        self.handler.file = SimpleUploadedFile(
+            "test.jpg", b"file_content", content_type="image/jpeg"
+        )
+        self.handler.file_size = len(b"file_content")
+        self.handler.content_type = "image/jpeg"
+        self.handler.field_name = "image"
+        self.handler.chunk_size = 65536
+
+    def test_file_size_limit(self):
+        self.handler.file_size = self.handler.max_size + 1
+        with self.assertRaises(ValidationError):
+            self.handler.receive_data_chunk(b"chunk", 0)
+
+    @patch("magic.from_buffer")
+    def test_content_type_validation(self, mock_from_buffer):
+        mock_from_buffer.return_value = "image/gif"
+        with self.assertRaises(ValidationError):
+            self.handler.file_complete(self.handler.file_size)
+
+    @patch("clamd.ClamdUnixSocket")
+    def test_malware_detection(self, mock_clamd):
+        mock_clamd.return_value.instream.return_value = {
+            "stream": ("FOUND", "Eicar-Test-Signature")
+        }
+        with self.assertRaises(ValidationError):
+            self.handler.file_complete(self.handler.file_size)
+
+    @patch("PIL.Image.open")
+    def test_billion_laughs_protection(self, mock_open):
+        mock_image = MagicMock()
+        mock_image.width = 10001
+        mock_image.height = 10001
+        mock_open.return_value.__enter__.return_value = mock_image
+        with self.assertRaises(ValidationError):
+            self.handler.file_complete(self.handler.file_size)

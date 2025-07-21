@@ -1,10 +1,13 @@
-import random
-import string
+import secrets
 
 from django.db import models
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
+from django.views.decorators.cache import cache_page
+from django.utils.decorators import method_decorator
+from django_ratelimit.decorators import ratelimit
+from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -41,8 +44,9 @@ class RoleViewSet(viewsets.ModelViewSet):
 
 class UserViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for managing users.
+    Provides CRUD operations for users, along with OTP-based authentication.
     """
+
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
@@ -50,14 +54,24 @@ class UserViewSet(viewsets.ModelViewSet):
     filterset_fields = ["username", "email"]
 
     def get_permissions(self):
+        """
+        Allow unauthenticated access to the `create`, `send_otp`, and `verify_otp` actions.
+        """
         if self.action in ["create", "send_otp", "verify_otp"]:
             return [AllowAny()]
         return super().get_permissions()
 
+    @extend_schema(
+        summary="Send OTP",
+        description="Sends a one-time password (OTP) to the user's registered phone number or email address.",
+        request=UserSerializer,
+        responses={200: "OTP sent successfully.", 400: "Bad Request", 404: "User not found."},
+    )
     @action(detail=False, methods=["post"])
+    @ratelimit(key="ip", rate="5/m", block=True)
     def send_otp(self, request):
         """
-        Send OTP to user.
+        Sends an OTP to the user's phone number or email.
         """
         phone_number = request.data.get("phone_number")
         email = request.data.get("email")
@@ -77,34 +91,39 @@ class UserViewSet(viewsets.ModelViewSet):
                 user = User.objects.get(email=email)
             except User.DoesNotExist:
                 return Response(
-                    {"error": "User not found."}, status=status.HTTP_400_BAD_REQUEST
+                    {"error": "User not found."}, status=status.HTTP_404_NOT_FOUND
                 )
         if not user:
             return Response(
-                {"error": "User not found."}, status=status.HTTP_400_BAD_REQUEST
+                {"error": "User not found."}, status=status.HTTP_404_NOT_FOUND
             )
 
-        otp = OTP.objects.create(
-            user=user, code="".join(random.choices(string.digits, k=6))
-        )
+        otp = OTP.objects.create(user=user, code=secrets.token_hex(3))
         # Send SMS
         if user.phone_number:
-            send_sms_notification.delay(
-                str(user.phone_number), {"code": otp.code}
-            )
+            send_sms_notification.delay(str(user.phone_number), {"code": otp.code})
         # Send Email
         if user.email:
-            send_email_notification.delay(
-                user.email, "OTP Code", {"code": otp.code}
-            )
+            send_email_notification.delay(user.email, "OTP Code", {"code": otp.code})
         return Response(
             {"message": "OTP sent successfully."}, status=status.HTTP_200_OK
         )
 
+    @extend_schema(
+        summary="Verify OTP",
+        description="Verifies the OTP and returns JWT tokens for authentication.",
+        request=UserSerializer,
+        responses={
+            200: "Returns refresh and access tokens.",
+            400: "Bad Request",
+            404: "User not found.",
+        },
+    )
     @action(detail=False, methods=["post"])
+    @ratelimit(key="ip", rate="5/m", block=True)
     def verify_otp(self, request):
         """
-        Verify OTP and login user.
+        Verifies the OTP and logs in the user.
         """
         phone_number = request.data.get("phone_number")
         email = request.data.get("email")
@@ -125,18 +144,16 @@ class UserViewSet(viewsets.ModelViewSet):
                 user = User.objects.get(email=email)
             except User.DoesNotExist:
                 return Response(
-                    {"error": "User not found."}, status=status.HTTP_400_BAD_REQUEST
+                    {"error": "User not found."}, status=status.HTTP_404_NOT_FOUND
                 )
         if not user:
             return Response(
-                {"error": "User not found."}, status=status.HTTP_400_BAD_REQUEST
+                {"error": "User not found."}, status=status.HTTP_404_NOT_FOUND
             )
 
         try:
             otp = OTP.objects.get(user=user, code=code, is_active=True)
-            if (
-                timezone.now() - otp.created_at
-            ).total_seconds() > 300:  # 5 minutes
+            if (timezone.now() - otp.created_at).total_seconds() > 300:  # 5 minutes
                 otp.is_active = False
                 otp.save()
                 return Response(
@@ -146,10 +163,7 @@ class UserViewSet(viewsets.ModelViewSet):
             otp.save()
             refresh = RefreshToken.for_user(user)
             return Response(
-                {
-                    "refresh": str(refresh),
-                    "access": str(refresh.access_token),
-                }
+                {"refresh": str(refresh), "access": str(refresh.access_token)}
             )
         except OTP.DoesNotExist:
             return Response(
@@ -161,8 +175,9 @@ class UserViewSet(viewsets.ModelViewSet):
 
 class TeamViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for managing teams.
+    Handles CRUD operations for teams, as well as inviting, responding to invitations, leaving, and removing members.
     """
+
     queryset = Team.objects.all()
     serializer_class = TeamSerializer
     permission_classes = [IsAuthenticated, IsCaptainOrReadOnly]
@@ -170,12 +185,20 @@ class TeamViewSet(viewsets.ModelViewSet):
     filterset_fields = ["name", "captain"]
 
     def perform_create(self, serializer):
+        """
+        Sets the current user as the captain of the team upon creation.
+        """
         serializer.save(captain=self.request.user)
 
+    @extend_schema(
+        summary="Invite a member to a team",
+        request=TeamInvitationSerializer,
+        responses={200: "Invitation sent successfully.", 400: "Bad Request", 404: "User not found."},
+    )
     @action(detail=True, methods=["post"], permission_classes=[IsCaptain])
     def invite_member(self, request, pk=None):
         """
-        Invite a member to a team.
+        Invites a user to join the team. Only the team captain can perform this action.
         """
         team = self.get_object()
         user_id = request.data.get("user_id")
@@ -187,7 +210,7 @@ class TeamViewSet(viewsets.ModelViewSet):
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
             return Response(
-                {"error": "User not found."}, status=status.HTTP_400_BAD_REQUEST
+                {"error": "User not found."}, status=status.HTTP_404_NOT_FOUND
             )
         if user in team.members.all():
             return Response(
@@ -206,6 +229,11 @@ class TeamViewSet(viewsets.ModelViewSet):
             {"message": "Invitation sent successfully."}, status=status.HTTP_200_OK
         )
 
+    @extend_schema(
+        summary="Respond to a team invitation",
+        request=TeamInvitationSerializer,
+        responses={200: "Invitation response recorded.", 400: "Bad Request", 404: "Invitation not found."},
+    )
     @action(
         detail=False,
         methods=["post"],
@@ -214,11 +242,11 @@ class TeamViewSet(viewsets.ModelViewSet):
     )
     def respond_invitation(self, request):
         """
-        Respond to a team invitation.
+        Allows a user to accept or reject a team invitation.
         """
         invitation_id = request.data.get("invitation_id")
-        status = request.data.get("status")
-        if not invitation_id or not status:
+        status_response = request.data.get("status")
+        if not invitation_id or not status_response:
             return Response(
                 {"error": "Invitation ID and status are required."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -229,16 +257,16 @@ class TeamViewSet(viewsets.ModelViewSet):
             )
         except TeamInvitation.DoesNotExist:
             return Response(
-                {"error": "Invitation not found."}, status=status.HTTP_400_BAD_REQUEST
+                {"error": "Invitation not found."}, status=status.HTTP_404_NOT_FOUND
             )
-        if status == "accepted":
+        if status_response == "accepted":
             invitation.status = "accepted"
             invitation.team.members.add(request.user)
             invitation.save()
             return Response(
                 {"message": "Invitation accepted."}, status=status.HTTP_200_OK
             )
-        elif status == "rejected":
+        elif status_response == "rejected":
             invitation.status = "rejected"
             invitation.save()
             return Response(
@@ -249,10 +277,14 @@ class TeamViewSet(viewsets.ModelViewSet):
                 {"error": "Invalid status."}, status=status.HTTP_400_BAD_REQUEST
             )
 
+    @extend_schema(
+        summary="Leave a team",
+        responses={200: "You have left the team.", 400: "Bad Request"},
+    )
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def leave_team(self, request, pk=None):
         """
-        Leave a team.
+        Allows a member to leave a team. The captain cannot leave the team.
         """
         team = self.get_object()
         if request.user not in team.members.all():
@@ -270,10 +302,15 @@ class TeamViewSet(viewsets.ModelViewSet):
             {"message": "You have left the team."}, status=status.HTTP_200_OK
         )
 
+    @extend_schema(
+        summary="Remove a member from a team",
+        request=UserSerializer,
+        responses={200: "Member removed successfully.", 400: "Bad Request", 404: "User not found."},
+    )
     @action(detail=True, methods=["post"], permission_classes=[IsCaptain])
     def remove_member(self, request, pk=None):
         """
-        Remove a member from a team.
+        Allows the team captain to remove a member from the team.
         """
         team = self.get_object()
         user_id = request.data.get("user_id")
@@ -285,7 +322,7 @@ class TeamViewSet(viewsets.ModelViewSet):
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
             return Response(
-                {"error": "User not found."}, status=status.HTTP_400_BAD_REQUEST
+                {"error": "User not found."}, status=status.HTTP_404_NOT_FOUND
             )
         if user not in team.members.all():
             return Response(
@@ -311,7 +348,14 @@ class DashboardView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.user
+        user = (
+            User.objects.prefetch_related(
+                "tournaments", "sent_invitations", "received_invitations"
+            )
+            .select_related("wallet")
+            .get(id=request.user.id)
+        )
+
         upcoming_tournaments = user.tournaments.filter(
             start_date__gte=timezone.now()
         ).order_by("start_date")
@@ -336,6 +380,7 @@ class DashboardView(APIView):
         return Response(data)
 
 
+@method_decorator(cache_page(60 * 15), name="get")
 class TopPlayersView(APIView):
     """
     API view for getting top players by prize money.
@@ -343,12 +388,16 @@ class TopPlayersView(APIView):
 
     def get(self, request):
         users = User.objects.annotate(
-            total_winnings=models.Sum("wallet__transaction__amount", filter=models.Q(wallet__transaction__transaction_type="prize"))
+            total_winnings=models.Sum(
+                "wallet__transaction__amount",
+                filter=models.Q(wallet__transaction__transaction_type="prize"),
+            )
         ).order_by("-total_winnings")
         serializer = TopPlayerSerializer(users, many=True)
         return Response(serializer.data)
 
 
+@method_decorator(cache_page(60 * 15), name="get")
 class TopTeamsView(APIView):
     """
     API view for getting top teams by prize money.
@@ -356,7 +405,10 @@ class TopTeamsView(APIView):
 
     def get(self, request):
         teams = Team.objects.annotate(
-            total_winnings=models.Sum("members__wallet__transaction__amount", filter=models.Q(members__wallet__transaction__transaction_type="prize"))
+            total_winnings=models.Sum(
+                "members__wallet__transaction__amount",
+                filter=models.Q(members__wallet__transaction__transaction_type="prize"),
+            )
         ).order_by("-total_winnings")
         serializer = TopTeamSerializer(teams, many=True)
         return Response(serializer.data)
