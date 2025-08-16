@@ -14,9 +14,7 @@ def send_sms_notification(phone_number, context):
         print(f"--- FAKE SMS to {phone_number}: {context} ---")
         return
 
-    smsir = SmsIr(
-        api_key=settings.SMSIR_API_KEY, line_number=settings.SMSIR_LINE_NUMBER
-    )
+    smsir = SmsIr(api_key=settings.SMSIR_API_KEY)
 
     # Simple message formatting based on context
     if "code" in context:
@@ -26,8 +24,10 @@ def send_sms_notification(phone_number, context):
     else:
         message = f"You have a new notification: {context}"
 
-    # The smsir library expects a list of numbers.
-    smsir.send_bulk(message, [str(phone_number)])
+    # The smsir library expects a single number for send_sms.
+    smsir.send_sms(
+        str(phone_number), message, settings.SMSIR_LINE_NUMBER
+    )
 
 
 @shared_task

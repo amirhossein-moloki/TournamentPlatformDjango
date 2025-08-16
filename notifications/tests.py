@@ -44,29 +44,30 @@ class NotificationTaskTests(TestCase):
             email="user2@test.com",
         )
 
-    @override_settings(SMSIR_API_KEY="dummy_api_key")
+    @override_settings(SMSIR_API_KEY="dummy_api_key", SMSIR_LINE_NUMBER="12345")
     @patch("notifications.tasks.SmsIr")
     def test_send_sms_notification_with_code(self, mock_smsir):
         """Test sending an SMS with a verification code."""
         send_sms_notification(self.user1.phone_number, {"code": "12345"})
-        mock_smsir.assert_called_once_with(
-            api_key="dummy_api_key", line_number=settings.SMSIR_LINE_NUMBER
-        )
+        mock_smsir.assert_called_once_with(api_key="dummy_api_key")
         instance = mock_smsir.return_value
-        instance.send_bulk.assert_called_once_with(
-            "Your verification code is: 12345", [str(self.user1.phone_number)]
+        instance.send_sms.assert_called_once_with(
+            str(self.user1.phone_number),
+            "Your verification code is: 12345",
+            "12345",
         )
 
-    @override_settings(SMSIR_API_KEY="dummy_api_key")
+    @override_settings(SMSIR_API_KEY="dummy_api_key", SMSIR_LINE_NUMBER="12345")
     @patch("notifications.tasks.SmsIr")
     def test_send_sms_notification_for_tournament(self, mock_smsir):
         """Test sending an SMS for a tournament notification."""
         context = {"tournament_name": "Test Tourney", "room_id": "room123"}
         send_sms_notification(self.user1.phone_number, context)
         instance = mock_smsir.return_value
-        instance.send_bulk.assert_called_once_with(
+        instance.send_sms.assert_called_once_with(
+            str(self.user1.phone_number),
             "You have joined the tournament: Test Tourney. Room ID: room123",
-            [str(self.user1.phone_number)],
+            "12345",
         )
 
     @patch("notifications.tasks.send_mail")
